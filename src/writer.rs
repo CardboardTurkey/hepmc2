@@ -70,10 +70,7 @@ impl<T: Write> Writer<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_header<U: Display>(
-        stream: T,
-        header: U,
-    ) -> Result<Self, io::Error> {
+    pub fn with_header<U: Display>(stream: T, header: U) -> Result<Self, io::Error> {
         let mut writer = Self {
             stream,
             finished: false,
@@ -203,10 +200,7 @@ impl<T: Write> Writer<T> {
         self.stream.write_all(b"\n")
     }
 
-    fn write_particle_line(
-        &mut self,
-        particle: &Particle,
-    ) -> Result<(), io::Error> {
+    fn write_particle_line(&mut self, particle: &Particle) -> Result<(), io::Error> {
         write!(
             self.stream,
             "P 0 {} {} {} {} {} {} {} {} {} {} {}",
@@ -228,10 +222,7 @@ impl<T: Write> Writer<T> {
         self.stream.write_all(b"\n")
     }
 
-    fn write_weight_names_line(
-        &mut self,
-        names: &[String],
-    ) -> Result<(), io::Error> {
+    fn write_weight_names_line(&mut self, names: &[String]) -> Result<(), io::Error> {
         write!(self.stream, "N {}", names.len())?;
         for name in names {
             write!(self.stream, r#" "{}""#, name)?;
@@ -247,10 +238,7 @@ impl<T: Write> Writer<T> {
         )
     }
 
-    fn write_cross_section_line(
-        &mut self,
-        xs: &CrossSection,
-    ) -> Result<(), io::Error> {
+    fn write_cross_section_line(&mut self, xs: &CrossSection) -> Result<(), io::Error> {
         writeln!(
             self.stream,
             "C {} {}",
@@ -275,10 +263,7 @@ impl<T: Write> Writer<T> {
         )
     }
 
-    fn write_heavy_ion_info_line(
-        &mut self,
-        hi: &HeavyIonInfo,
-    ) -> Result<(), io::Error> {
+    fn write_heavy_ion_info_line(&mut self, hi: &HeavyIonInfo) -> Result<(), io::Error> {
         writeln!(
             self.stream,
             "H {} {} {} {} {} {} {} {} {} {} {} {} {}",
