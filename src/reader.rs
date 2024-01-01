@@ -9,7 +9,7 @@ use crate::event::*;
 
 use nom::{
     bytes::complete::{take_until, take_while1},
-    character::complete::{char, space1, i32, u64},
+    character::complete::{char, i32, space1, u64},
     combinator::opt,
     number::complete::double,
     sequence::{delimited, preceded, tuple},
@@ -155,7 +155,6 @@ fn parse_event_line(line: &str) -> Result<Event, ParseError> {
     for _ in 0..nrandom_states {
         let (rem, random_state) = ws_i32(rest)?;
         rest = rem;
-        let random_state = random_state;
         random_states.push(random_state);
     }
     let (mut rest, nweights) = ws_u64(rest)?;
@@ -303,10 +302,7 @@ fn parse_pdf_info_line(
         x: [x0, x1],
         scale,
         xf: [xf0, xf1],
-        pdf_id: [
-            pdf_id0.unwrap_or(0),
-            pdf_id1.unwrap_or(0),
-        ],
+        pdf_id: [pdf_id0.unwrap_or(0), pdf_id1.unwrap_or(0)],
     };
     event.pdf_info = pdf_info;
     Ok(())
