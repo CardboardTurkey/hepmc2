@@ -10,6 +10,9 @@ keywords = ["physics", "parser"]
 categories = ["science", "parser-implementations"]
 repository = "https://github.com/a-maier/hepmc2"
 
+[workspace]
+members = ["hepmc2-macros"]
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
@@ -17,11 +20,23 @@ nom = "7"
 ryu = "1.0"
 strum = { version = "0.25", features = ["derive"] }
 thiserror = "1.0"
+hepmc2-macros = { version = "0.1.0", path = "hepmc2-macros" }
+tokio = { version = "1.35.1", features = [
+    "io-util",
+    "rt-multi-thread",
+], optional = true }
+maybe-async = "0.2.7"
+
+[features]
+default = ["sync"]
+sync = ["hepmc2-macros/sync", "maybe-async/is_sync"]
+tokio = ["hepmc2-macros/tokio", "dep:tokio"]
 
 [dev-dependencies]
 criterion = "0.5.1"
 rand = "0.8.4"
 rand_xoshiro = "0.6.0"
+tokio = { version = "1.35.1", features = ["rt", "macros"] }
 
 [[bench]]
 name = "benchmark"
