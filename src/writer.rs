@@ -148,49 +148,55 @@ impl<T: Write> Writer<T> {
     }
 
     fn write_header<U: Display>(&mut self, header: U) -> Result<(), io::Error> {
-        write!(self.stream, "{}", header)
+        self.stream.write_all(header.to_string().as_bytes())
     }
 
     fn write_event_line(&mut self, event: &Event) -> Result<(), io::Error> {
-        write!(
-            self.stream,
-            "E {} {} {} {} {} {} {} {} 0 0 {}",
-            event.number,
-            event.mpi,
-            ryu::Buffer::new().format(event.scale),
-            ryu::Buffer::new().format(event.alpha_qcd),
-            ryu::Buffer::new().format(event.alpha_qed),
-            event.signal_process_id,
-            event.signal_process_vertex,
-            event.vertices.len(),
-            event.random_states.len()
+        self.stream.write_all(
+            format!(
+                "E {} {} {} {} {} {} {} {} 0 0 {}",
+                event.number,
+                event.mpi,
+                ryu::Buffer::new().format(event.scale),
+                ryu::Buffer::new().format(event.alpha_qcd),
+                ryu::Buffer::new().format(event.alpha_qed),
+                event.signal_process_id,
+                event.signal_process_vertex,
+                event.vertices.len(),
+                event.random_states.len()
+            )
+            .as_bytes(),
         )?;
         for state in &event.random_states {
-            write!(self.stream, " {}", state)?;
+            self.stream.write_all(format!(" {state}").as_bytes())?
         }
-        write!(self.stream, " {}", event.weights.len())?;
+        self.stream
+            .write_all(format!(" {}", event.weights.len()).as_bytes())?;
         let mut buffer = ryu::Buffer::new();
         for weight in &event.weights {
-            write!(self.stream, " {}", buffer.format(*weight))?;
+            self.stream
+                .write_all(format!(" {}", buffer.format(*weight)).as_bytes())?;
         }
         self.stream.write_all(b"\n")
     }
 
     fn write_vertex_line(&mut self, vertex: &Vertex) -> Result<(), io::Error> {
-        write!(
-            self.stream,
-            "V {} {} {} {} {} {} 0 {} {}",
-            vertex.barcode,
-            vertex.status,
-            ryu::Buffer::new().format(vertex.x),
-            ryu::Buffer::new().format(vertex.y),
-            ryu::Buffer::new().format(vertex.z),
-            ryu::Buffer::new().format(vertex.t),
-            vertex.particles_in.len() + vertex.particles_out.len(),
-            vertex.weights.len()
+        self.stream.write_all(
+            format!(
+                "V {} {} {} {} {} {} 0 {} {}",
+                vertex.barcode,
+                vertex.status,
+                ryu::Buffer::new().format(vertex.x),
+                ryu::Buffer::new().format(vertex.y),
+                ryu::Buffer::new().format(vertex.z),
+                ryu::Buffer::new().format(vertex.t),
+                vertex.particles_in.len() + vertex.particles_out.len(),
+                vertex.weights.len()
+            )
+            .as_bytes(),
         )?;
         for weight in &vertex.weights {
-            write!(self.stream, " {}", weight)?;
+            self.stream.write_all(format!(" {weight}").as_bytes())?;
         }
         self.stream.write_all(b"\n")
     }
@@ -199,23 +205,26 @@ impl<T: Write> Writer<T> {
         &mut self,
         particle: &Particle,
     ) -> Result<(), io::Error> {
-        write!(
-            self.stream,
-            "P 0 {} {} {} {} {} {} {} {} {} {} {}",
-            particle.id,
-            ryu::Buffer::new().format(particle.p[1]),
-            ryu::Buffer::new().format(particle.p[2]),
-            ryu::Buffer::new().format(particle.p[3]),
-            ryu::Buffer::new().format(particle.p[0]),
-            ryu::Buffer::new().format(particle.m),
-            particle.status,
-            ryu::Buffer::new().format(particle.theta),
-            ryu::Buffer::new().format(particle.phi),
-            particle.end_vtx,
-            particle.flows.len()
+        self.stream.write_all(
+            format!(
+                "P 0 {} {} {} {} {} {} {} {} {} {} {}",
+                particle.id,
+                ryu::Buffer::new().format(particle.p[1]),
+                ryu::Buffer::new().format(particle.p[2]),
+                ryu::Buffer::new().format(particle.p[3]),
+                ryu::Buffer::new().format(particle.p[0]),
+                ryu::Buffer::new().format(particle.m),
+                particle.status,
+                ryu::Buffer::new().format(particle.theta),
+                ryu::Buffer::new().format(particle.phi),
+                particle.end_vtx,
+                particle.flows.len()
+            )
+            .as_bytes(),
         )?;
         for (idx, val) in &particle.flows {
-            write!(self.stream, " {} {}", idx, val)?;
+            self.stream
+                .write_all(format!(" {} {}", idx, val).as_bytes())?;
         }
         self.stream.write_all(b"\n")
     }
@@ -224,18 +233,19 @@ impl<T: Write> Writer<T> {
         &mut self,
         names: &[String],
     ) -> Result<(), io::Error> {
-        write!(self.stream, "N {}", names.len())?;
+        self.stream
+            .write_all(format!("N {}", names.len()).as_bytes())?;
         for name in names {
-            write!(self.stream, r#" "{}""#, name)?;
+            self.stream
+                .write_all(format!(r#" "{}""#, name).as_bytes())?;
         }
         self.stream.write_all(b"\n")
     }
 
     fn write_unit_line(&mut self, event: &Event) -> Result<(), io::Error> {
-        writeln!(
-            self.stream,
-            "U {:?} {:?}",
-            event.energy_unit, event.length_unit
+        self.stream.write_all(
+            format!("U {:?} {:?}\n", event.energy_unit, event.length_unit)
+                .as_bytes(),
         )
     }
 
@@ -243,27 +253,31 @@ impl<T: Write> Writer<T> {
         &mut self,
         xs: &CrossSection,
     ) -> Result<(), io::Error> {
-        writeln!(
-            self.stream,
-            "C {} {}",
-            ryu::Buffer::new().format(xs.cross_section),
-            ryu::Buffer::new().format(xs.cross_section_error)
+        self.stream.write_all(
+            format!(
+                "C {} {}\n",
+                ryu::Buffer::new().format(xs.cross_section),
+                ryu::Buffer::new().format(xs.cross_section_error)
+            )
+            .as_bytes(),
         )
     }
 
     fn write_pdf_info_line(&mut self, pdf: &PdfInfo) -> Result<(), io::Error> {
-        writeln!(
-            self.stream,
-            "F {} {} {} {} {} {} {} {} {}",
-            pdf.parton_id[0],
-            pdf.parton_id[1],
-            ryu::Buffer::new().format(pdf.x[0]),
-            ryu::Buffer::new().format(pdf.x[1]),
-            ryu::Buffer::new().format(pdf.scale),
-            ryu::Buffer::new().format(pdf.xf[0]),
-            ryu::Buffer::new().format(pdf.xf[1]),
-            pdf.pdf_id[0],
-            pdf.pdf_id[1],
+        self.stream.write_all(
+            format!(
+                "F {} {} {} {} {} {} {} {} {}\n",
+                pdf.parton_id[0],
+                pdf.parton_id[1],
+                ryu::Buffer::new().format(pdf.x[0]),
+                ryu::Buffer::new().format(pdf.x[1]),
+                ryu::Buffer::new().format(pdf.scale),
+                ryu::Buffer::new().format(pdf.xf[0]),
+                ryu::Buffer::new().format(pdf.xf[1]),
+                pdf.pdf_id[0],
+                pdf.pdf_id[1],
+            )
+            .as_bytes(),
         )
     }
 
@@ -271,22 +285,24 @@ impl<T: Write> Writer<T> {
         &mut self,
         hi: &HeavyIonInfo,
     ) -> Result<(), io::Error> {
-        writeln!(
-            self.stream,
-            "H {} {} {} {} {} {} {} {} {} {} {} {} {}",
-            hi.ncoll_hard,
-            hi.npart_proj,
-            hi.npart_targ,
-            hi.ncoll,
-            hi.spectator_neutrons,
-            hi.spectator_protons,
-            hi.n_nwounded_collisions,
-            hi.nwounded_n_collisions,
-            hi.nwounded_nwounded_collisions,
-            ryu::Buffer::new().format(hi.impact_parameter),
-            ryu::Buffer::new().format(hi.event_plane_angle),
-            ryu::Buffer::new().format(hi.eccentricity),
-            ryu::Buffer::new().format(hi.sigma_inel_nn),
+        self.stream.write_all(
+            format!(
+                "H {} {} {} {} {} {} {} {} {} {} {} {} {}\n",
+                hi.ncoll_hard,
+                hi.npart_proj,
+                hi.npart_targ,
+                hi.ncoll,
+                hi.spectator_neutrons,
+                hi.spectator_protons,
+                hi.n_nwounded_collisions,
+                hi.nwounded_n_collisions,
+                hi.nwounded_nwounded_collisions,
+                ryu::Buffer::new().format(hi.impact_parameter),
+                ryu::Buffer::new().format(hi.event_plane_angle),
+                ryu::Buffer::new().format(hi.eccentricity),
+                ryu::Buffer::new().format(hi.sigma_inel_nn),
+            )
+            .as_bytes(),
         )
     }
 }
