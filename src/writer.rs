@@ -1,6 +1,6 @@
 use std::default::Default;
 use std::fmt::Display;
-use std::io::{self, Write};
+use std::io;
 use std::mem::take;
 
 use crate::event::*;
@@ -15,12 +15,12 @@ const DEFAULT_FOOTER: &[u8] = b"HepMC::IO_GenEvent-END_EVENT_LISTING\n";
 
 /// Writer for the HepMC2 format
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct Writer<T: Write> {
+pub struct Writer<T: io::Write> {
     stream: T,
     finished: bool,
 }
 
-impl<T: Write + Default> Writer<T> {
+impl<T: io::Write + Default> Writer<T> {
     /// Retrieve the underlying writer
     pub fn into_inner(mut self) -> T {
         // ensure that the destructor doesn't do anything
@@ -29,7 +29,162 @@ impl<T: Write + Default> Writer<T> {
     }
 }
 
-impl<T: Write> Writer<T> {
+trait WriteUtils<T> {
+    fn stream(&mut self) -> &mut impl io::Write;
+    fn finished(&self) -> bool;
+    fn mark_finished(&mut self);
+    fn construct(stream: T) -> Self;
+
+    fn ref_finish(&mut self) -> Result<(), std::io::Error> {
+        use std::io::Write;
+        self.stream().write_all(DEFAULT_FOOTER)?;
+        self.mark_finished();
+        Ok(())
+    }
+
+    fn write_header<U: Display>(&mut self, header: U) -> Result<(), io::Error> {
+        use std::io::Write;
+        write!(self.stream(), "{}", header)
+    }
+
+    fn write_event_line(&mut self, event: &Event) -> Result<(), io::Error> {
+        use std::io::Write;
+        write!(
+            self.stream(),
+            "E {} {} {} {} {} {} {} {} 0 0 {}",
+            event.number,
+            event.mpi,
+            ryu::Buffer::new().format(event.scale),
+            ryu::Buffer::new().format(event.alpha_qcd),
+            ryu::Buffer::new().format(event.alpha_qed),
+            event.signal_process_id,
+            event.signal_process_vertex,
+            event.vertices.len(),
+            event.random_states.len()
+        )?;
+        for state in &event.random_states {
+            write!(self.stream(), " {}", state)?;
+        }
+        write!(self.stream(), " {}", event.weights.len())?;
+        let mut buffer = ryu::Buffer::new();
+        for weight in &event.weights {
+            write!(self.stream(), " {}", buffer.format(*weight))?;
+        }
+        self.stream().write_all(b"\n")
+    }
+
+    fn write_vertex_line(&mut self, vertex: &Vertex) -> Result<(), io::Error> {
+        use std::io::Write;
+        write!(
+            self.stream(),
+            "V {} {} {} {} {} {} 0 {} {}",
+            vertex.barcode,
+            vertex.status,
+            ryu::Buffer::new().format(vertex.x),
+            ryu::Buffer::new().format(vertex.y),
+            ryu::Buffer::new().format(vertex.z),
+            ryu::Buffer::new().format(vertex.t),
+            vertex.particles_in.len() + vertex.particles_out.len(),
+            vertex.weights.len()
+        )?;
+        for weight in &vertex.weights {
+            write!(self.stream(), " {}", weight)?;
+        }
+        self.stream().write_all(b"\n")
+    }
+
+    fn write_particle_line(&mut self, particle: &Particle) -> Result<(), io::Error> {
+        use std::io::Write;
+        write!(
+            self.stream(),
+            "P 0 {} {} {} {} {} {} {} {} {} {} {}",
+            particle.id,
+            ryu::Buffer::new().format(particle.p[1]),
+            ryu::Buffer::new().format(particle.p[2]),
+            ryu::Buffer::new().format(particle.p[3]),
+            ryu::Buffer::new().format(particle.p[0]),
+            ryu::Buffer::new().format(particle.m),
+            particle.status,
+            ryu::Buffer::new().format(particle.theta),
+            ryu::Buffer::new().format(particle.phi),
+            particle.end_vtx,
+            particle.flows.len()
+        )?;
+        for (idx, val) in &particle.flows {
+            write!(self.stream(), " {} {}", idx, val)?;
+        }
+        self.stream().write_all(b"\n")
+    }
+
+    fn write_weight_names_line(&mut self, names: &[String]) -> Result<(), io::Error> {
+        use std::io::Write;
+        write!(self.stream(), "N {}", names.len())?;
+        for name in names {
+            write!(self.stream(), r#" "{}""#, name)?;
+        }
+        self.stream().write_all(b"\n")
+    }
+
+    fn write_unit_line(&mut self, event: &Event) -> Result<(), io::Error> {
+        use std::io::Write;
+        writeln!(
+            self.stream(),
+            "U {:?} {:?}",
+            event.energy_unit,
+            event.length_unit
+        )
+    }
+
+    fn write_cross_section_line(&mut self, xs: &CrossSection) -> Result<(), io::Error> {
+        use std::io::Write;
+        writeln!(
+            self.stream(),
+            "C {} {}",
+            ryu::Buffer::new().format(xs.cross_section),
+            ryu::Buffer::new().format(xs.cross_section_error)
+        )
+    }
+
+    fn write_pdf_info_line(&mut self, pdf: &PdfInfo) -> Result<(), io::Error> {
+        use std::io::Write;
+        writeln!(
+            self.stream(),
+            "F {} {} {} {} {} {} {} {} {}",
+            pdf.parton_id[0],
+            pdf.parton_id[1],
+            ryu::Buffer::new().format(pdf.x[0]),
+            ryu::Buffer::new().format(pdf.x[1]),
+            ryu::Buffer::new().format(pdf.scale),
+            ryu::Buffer::new().format(pdf.xf[0]),
+            ryu::Buffer::new().format(pdf.xf[1]),
+            pdf.pdf_id[0],
+            pdf.pdf_id[1],
+        )
+    }
+
+    fn write_heavy_ion_info_line(&mut self, hi: &HeavyIonInfo) -> Result<(), io::Error> {
+        use std::io::Write;
+        writeln!(
+            self.stream(),
+            "H {} {} {} {} {} {} {} {} {} {} {} {} {}",
+            hi.ncoll_hard,
+            hi.npart_proj,
+            hi.npart_targ,
+            hi.ncoll,
+            hi.spectator_neutrons,
+            hi.spectator_protons,
+            hi.n_nwounded_collisions,
+            hi.nwounded_n_collisions,
+            hi.nwounded_nwounded_collisions,
+            ryu::Buffer::new().format(hi.impact_parameter),
+            ryu::Buffer::new().format(hi.event_plane_angle),
+            ryu::Buffer::new().format(hi.eccentricity),
+            ryu::Buffer::new().format(hi.sigma_inel_nn),
+        )
+    }
+}
+
+pub trait Write<T>: WriteUtils<T> {
     /// Construct new `Writer`
     ///
     /// This automatically tries to write the mandatory HepMC header,
@@ -48,7 +203,10 @@ impl<T: Write> Writer<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(stream: T) -> Result<Self, io::Error> {
+    fn new(stream: T) -> Result<Self, io::Error>
+    where
+        Self: Sized,
+    {
         Self::with_header(stream, DEFAULT_HEADER)
     }
 
@@ -70,11 +228,15 @@ impl<T: Write> Writer<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_header<U: Display>(stream: T, header: U) -> Result<Self, io::Error> {
-        let mut writer = Self {
-            stream,
-            finished: false,
-        };
+    fn with_header<U: Display>(stream: T, header: U) -> Result<Self, io::Error>
+    where
+        Self: std::marker::Sized,
+    {
+        // let mut writer = Self {
+        //     stream,
+        //     finished: false,
+        // };
+        let mut writer = Self::construct(stream);
         writer.write_header(header)?;
         Ok(writer)
     }
@@ -96,7 +258,10 @@ impl<T: Write> Writer<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn finish(mut self) -> Result<(), std::io::Error> {
+    fn finish(mut self) -> Result<(), std::io::Error>
+    where
+        Self: std::marker::Sized,
+    {
         self.ref_finish()
     }
 
@@ -118,7 +283,7 @@ impl<T: Write> Writer<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn write(&mut self, event: &Event) -> Result<(), io::Error> {
+    fn write(&mut self, event: &Event) -> Result<(), io::Error> {
         self.write_event_line(event)?;
         if !event.weight_names.is_empty() {
             self.write_weight_names_line(&event.weight_names)?;
@@ -142,149 +307,38 @@ impl<T: Write> Writer<T> {
         Ok(())
     }
 
-    pub fn try_from(stream: T) -> Result<Self, io::Error> {
+    fn try_from(stream: T) -> Result<Self, io::Error>
+    where
+        Self: std::marker::Sized,
+    {
         Self::with_header(stream, DEFAULT_HEADER)
-    }
-
-    fn ref_finish(&mut self) -> Result<(), std::io::Error> {
-        self.stream.write_all(DEFAULT_FOOTER)?;
-        self.finished = true;
-        Ok(())
-    }
-
-    fn write_header<U: Display>(&mut self, header: U) -> Result<(), io::Error> {
-        write!(self.stream, "{}", header)
-    }
-
-    fn write_event_line(&mut self, event: &Event) -> Result<(), io::Error> {
-        write!(
-            self.stream,
-            "E {} {} {} {} {} {} {} {} 0 0 {}",
-            event.number,
-            event.mpi,
-            ryu::Buffer::new().format(event.scale),
-            ryu::Buffer::new().format(event.alpha_qcd),
-            ryu::Buffer::new().format(event.alpha_qed),
-            event.signal_process_id,
-            event.signal_process_vertex,
-            event.vertices.len(),
-            event.random_states.len()
-        )?;
-        for state in &event.random_states {
-            write!(self.stream, " {}", state)?;
-        }
-        write!(self.stream, " {}", event.weights.len())?;
-        let mut buffer = ryu::Buffer::new();
-        for weight in &event.weights {
-            write!(self.stream, " {}", buffer.format(*weight))?;
-        }
-        self.stream.write_all(b"\n")
-    }
-
-    fn write_vertex_line(&mut self, vertex: &Vertex) -> Result<(), io::Error> {
-        write!(
-            self.stream,
-            "V {} {} {} {} {} {} 0 {} {}",
-            vertex.barcode,
-            vertex.status,
-            ryu::Buffer::new().format(vertex.x),
-            ryu::Buffer::new().format(vertex.y),
-            ryu::Buffer::new().format(vertex.z),
-            ryu::Buffer::new().format(vertex.t),
-            vertex.particles_in.len() + vertex.particles_out.len(),
-            vertex.weights.len()
-        )?;
-        for weight in &vertex.weights {
-            write!(self.stream, " {}", weight)?;
-        }
-        self.stream.write_all(b"\n")
-    }
-
-    fn write_particle_line(&mut self, particle: &Particle) -> Result<(), io::Error> {
-        write!(
-            self.stream,
-            "P 0 {} {} {} {} {} {} {} {} {} {} {}",
-            particle.id,
-            ryu::Buffer::new().format(particle.p[1]),
-            ryu::Buffer::new().format(particle.p[2]),
-            ryu::Buffer::new().format(particle.p[3]),
-            ryu::Buffer::new().format(particle.p[0]),
-            ryu::Buffer::new().format(particle.m),
-            particle.status,
-            ryu::Buffer::new().format(particle.theta),
-            ryu::Buffer::new().format(particle.phi),
-            particle.end_vtx,
-            particle.flows.len()
-        )?;
-        for (idx, val) in &particle.flows {
-            write!(self.stream, " {} {}", idx, val)?;
-        }
-        self.stream.write_all(b"\n")
-    }
-
-    fn write_weight_names_line(&mut self, names: &[String]) -> Result<(), io::Error> {
-        write!(self.stream, "N {}", names.len())?;
-        for name in names {
-            write!(self.stream, r#" "{}""#, name)?;
-        }
-        self.stream.write_all(b"\n")
-    }
-
-    fn write_unit_line(&mut self, event: &Event) -> Result<(), io::Error> {
-        writeln!(
-            self.stream,
-            "U {:?} {:?}",
-            event.energy_unit, event.length_unit
-        )
-    }
-
-    fn write_cross_section_line(&mut self, xs: &CrossSection) -> Result<(), io::Error> {
-        writeln!(
-            self.stream,
-            "C {} {}",
-            ryu::Buffer::new().format(xs.cross_section),
-            ryu::Buffer::new().format(xs.cross_section_error)
-        )
-    }
-
-    fn write_pdf_info_line(&mut self, pdf: &PdfInfo) -> Result<(), io::Error> {
-        writeln!(
-            self.stream,
-            "F {} {} {} {} {} {} {} {} {}",
-            pdf.parton_id[0],
-            pdf.parton_id[1],
-            ryu::Buffer::new().format(pdf.x[0]),
-            ryu::Buffer::new().format(pdf.x[1]),
-            ryu::Buffer::new().format(pdf.scale),
-            ryu::Buffer::new().format(pdf.xf[0]),
-            ryu::Buffer::new().format(pdf.xf[1]),
-            pdf.pdf_id[0],
-            pdf.pdf_id[1],
-        )
-    }
-
-    fn write_heavy_ion_info_line(&mut self, hi: &HeavyIonInfo) -> Result<(), io::Error> {
-        writeln!(
-            self.stream,
-            "H {} {} {} {} {} {} {} {} {} {} {} {} {}",
-            hi.ncoll_hard,
-            hi.npart_proj,
-            hi.npart_targ,
-            hi.ncoll,
-            hi.spectator_neutrons,
-            hi.spectator_protons,
-            hi.n_nwounded_collisions,
-            hi.nwounded_n_collisions,
-            hi.nwounded_nwounded_collisions,
-            ryu::Buffer::new().format(hi.impact_parameter),
-            ryu::Buffer::new().format(hi.event_plane_angle),
-            ryu::Buffer::new().format(hi.eccentricity),
-            ryu::Buffer::new().format(hi.sigma_inel_nn),
-        )
     }
 }
 
-impl<T: Write> Drop for Writer<T> {
+impl<T: io::Write> WriteUtils<T> for Writer<T> {
+    fn stream(&mut self) -> &mut impl io::Write {
+        &mut self.stream
+    }
+
+    fn finished(&self) -> bool {
+        self.finished
+    }
+
+    fn mark_finished(&mut self) {
+        self.finished = true;
+    }
+
+    fn construct(stream: T) -> Self {
+        Self {
+            stream,
+            finished: false,
+        }
+    }
+}
+
+impl <T: io::Write> Write<T> for Writer<T> {}
+
+impl<T: io::Write> Drop for Writer<T> {
     fn drop(&mut self) {
         if !self.finished {
             error!("Hepmc2 writer dropped before finished.");

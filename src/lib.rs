@@ -39,7 +39,7 @@ pub mod writer;
 
 pub use crate::event::Event;
 pub use crate::reader::Reader;
-pub use crate::writer::Writer;
+pub use crate::writer::{Write, Writer};
 
 #[cfg(test)]
 mod tests {
@@ -60,13 +60,13 @@ mod tests {
         let mut buf = Vec::<u8>::new();
         let event = reader.next().unwrap().unwrap();
         {
-            let mut writer = writer::Writer::try_from(&mut buf).unwrap();
+            let mut writer = <writer::Writer<_> as Write<_>>::try_from(&mut buf).unwrap();
             writer.write(&event).unwrap();
         }
         let mut reader = reader::Reader::from(BufReader::new(buf.as_slice()));
         let event = reader.next().unwrap().unwrap();
         let mut buf2 = Vec::<u8>::new();
-        let mut writer = writer::Writer::try_from(&mut buf2).unwrap();
+        let mut writer = <writer::Writer<_> as Write<_>>::try_from(&mut buf2).unwrap();
         writer.write(&event).unwrap();
         writer.finish().unwrap();
         use std::str::from_utf8;
