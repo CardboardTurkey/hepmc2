@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::default::Default;
 use std::fmt::{self, Display};
-use std::io::{self, BufRead};
-use std::iter::Iterator;
+use std::io;
 use std::num::{ParseFloatError, TryFromIntError};
 
 use crate::event::*;
 
+use hepmc2_macros::read_bound;
 use nom::{
     bytes::complete::{take_until, take_while1},
     character::complete::{char, i32, space1, u64},
@@ -34,14 +34,16 @@ impl<T> Reader<T> {
     }
 }
 
-impl<T: BufRead> Reader<T> {
+#[read_bound]
+impl<T> Reader<T> {
     /// Construct a new Reader
     pub fn new(stream: T) -> Self {
         stream.into()
     }
 }
 
-impl<T: BufRead> From<T> for Reader<T> {
+#[read_bound]
+impl<T> From<T> for Reader<T> {
     fn from(stream: T) -> Self {
         Self {
             stream,
@@ -51,11 +53,13 @@ impl<T: BufRead> From<T> for Reader<T> {
     }
 }
 
-impl<T: BufRead> Reader<T> {
-    fn skip_headers(&mut self) -> Result<(), io::Error> {
+#[read_bound]
+impl<T> Reader<T> {
+    #[maybe_async::maybe_async]
+    async fn skip_headers(&mut self) -> Result<(), io::Error> {
         while self.line.trim().is_empty() || self.line.starts_with("HepMC") {
             self.line.clear();
-            if self.stream.read_line(&mut self.line)? == 0 {
+            if self.stream.read_line(&mut self.line).await? == 0 {
                 break;
             }
             self.line_nr += 1;
@@ -63,11 +67,12 @@ impl<T: BufRead> Reader<T> {
         Ok(())
     }
 
-    fn parse_event_inner(&mut self) -> Result<Event, ParseError> {
+    #[maybe_async::maybe_async]
+    async fn parse_event_inner(&mut self) -> Result<Event, ParseError> {
         let mut event = parse_event_line(&self.line)?;
         loop {
             self.line.clear();
-            if self.stream.read_line(&mut self.line)? == 0 {
+            if self.stream.read_line(&mut self.line).await? == 0 {
                 break;
             };
             self.line_nr += 1;
@@ -97,12 +102,34 @@ impl<T: BufRead> Reader<T> {
         Ok(event)
     }
 
-    fn parse_event(&mut self) -> Result<Event, LineParseError> {
-        self.parse_event_inner().map_err(|err| LineParseError {
-            err,
-            line: self.line.clone(),
-            line_nr: self.line_nr,
-        })
+    #[maybe_async::maybe_async]
+    async fn parse_event(&mut self) -> Result<Event, LineParseError> {
+        self.parse_event_inner()
+            .await
+            .map_err(|err| LineParseError {
+                err,
+                line: self.line.clone(),
+                line_nr: self.line_nr,
+            })
+    }
+
+    #[maybe_async::async_impl]
+    /// Read the next event from the stream
+    // NOTE: This function is a tempory measure! The proper way to replicate an iterator in async
+    // context is to implement `futures::stream::Stream`. This should be done in a later
+    // contribution.
+    pub async fn next(&mut self) -> Option<std::result::Result<Event, LineParseError>> {
+        if let Err(err) = self.skip_headers().await {
+            return Some(Err(LineParseError {
+                err: err.into(),
+                line: self.line.clone(),
+                line_nr: self.line_nr,
+            }));
+        }
+        if self.line.is_empty() {
+            return None;
+        }
+        Some(self.parse_event().await)
     }
 }
 
@@ -374,7 +401,8 @@ fn parse_xs_info_line(line: &str, event: &mut Event) -> Result<(), ParseError> {
     Ok(())
 }
 
-impl<T: BufRead> Iterator for Reader<T> {
+#[maybe_async::sync_impl]
+impl<T: std::io::BufRead> Iterator for Reader<T> {
     type Item = Result<Event, LineParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {

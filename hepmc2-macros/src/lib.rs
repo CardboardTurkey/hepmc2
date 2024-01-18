@@ -77,3 +77,31 @@ pub fn write_bound(_: TokenStream, item: TokenStream) -> TokenStream {
         Err(e) => Error::into_compile_error(e).into(),
     }
 }
+
+/// Adds the trait bounds required for either sync or async reading
+///
+/// These bounds are applied to all generic parameters in either an impl block or
+/// struct definition.
+///
+/// Traits are chosen according to which features are enabled.
+#[proc_macro_attribute]
+pub fn read_bound(_: TokenStream, item: TokenStream) -> TokenStream {
+    if let Err(e) = feature_check() {
+        return Error::into_compile_error(e).into();
+    }
+    let read_trait = if cfg!(feature = "sync") {
+        vec![parse_quote!(::std::io::BufRead)]
+    } else if cfg!(feature = "tokio") {
+        vec![
+            parse_quote!(::tokio::io::AsyncBufReadExt),
+            parse_quote!(::std::marker::Unpin),
+        ]
+    } else {
+        unreachable!()
+    };
+    let item = add_trait_bound(parse_macro_input!(item as Item), &read_trait);
+    match item {
+        Ok(item) => quote::quote!(#item).into(),
+        Err(e) => Error::into_compile_error(e).into(),
+    }
+}

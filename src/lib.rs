@@ -48,11 +48,19 @@ compile_error!("One and only one sync/async feature must be enabled");
 mod tests {
     use super::*;
 
-    #[test]
-    fn tst_read() {
+    #[maybe_async::test(
+        feature = "sync",
+        async(
+            all(not(feature = "sync"), feature = "tokio"),
+            tokio::test(flavor = "multi_thread")
+        )
+    )]
+    async fn tst_read() {
         let mut reader = reader::Reader::from(EVENT_TXT);
-        assert!(reader.next().unwrap().is_ok());
-        assert!(reader.next().is_none());
+        let next_line = reader.next().await.unwrap();
+        assert!(next_line.is_ok());
+        let next_line = reader.next().await;
+        assert!(next_line.is_none());
     }
 
     #[maybe_async::test(
@@ -63,17 +71,20 @@ mod tests {
         )
     )]
     async fn tst_read_write() {
+        #[cfg(feature = "sync")]
         use std::io::BufReader;
+        #[cfg(feature = "tokio")]
+        use tokio::io::BufReader;
 
         let mut reader = reader::Reader::from(EVENT_TXT);
         let mut buf = Vec::<u8>::new();
-        let event = reader.next().unwrap().unwrap();
+        let event = reader.next().await.unwrap().unwrap();
         {
             let mut writer = writer::Writer::try_from(&mut buf).await.unwrap();
             writer.write(&event).await.unwrap();
         }
         let mut reader = reader::Reader::from(BufReader::new(buf.as_slice()));
-        let event = reader.next().unwrap().unwrap();
+        let event = reader.next().await.unwrap().unwrap();
         let mut buf2 = Vec::<u8>::new();
         let mut writer = writer::Writer::try_from(&mut buf2).await.unwrap();
         writer.write(&event).await.unwrap();
