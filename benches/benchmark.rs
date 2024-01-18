@@ -1,3 +1,5 @@
+#![cfg(feature = "sync")]
+
 use std::convert::{AsRef, From};
 use std::default::Default;
 use std::f64::consts::PI;

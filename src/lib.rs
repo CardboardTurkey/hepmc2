@@ -9,28 +9,60 @@
 //! current tests are not exhaustive.
 //!
 //! # Example
-//!
-//! ```rust,no_run
-//! // Read events from `events_in.hepmc2` and write them to `events_out.hepmc2`
-//! use hepmc2::{Reader, Writer};
-//!
-//! use std::io::BufReader;
-//! use std::fs::File;
-//!
-//! let input = BufReader::new(File::open("events_in.hepmc2")?);
-//! let in_events = Reader::from(input);
-//!
-//! let output = File::create("events_out.hepmc2")?;
-//! let mut writer = Writer::try_from(output)?;
-//!
-//! for event in in_events {
-//!    let event = event?;
-//!    println!("Current cross section: {}",  event.xs);
-//!    writer.write(&event)?
-//! }
-//! writer.finish()?;
-//! # Ok::<(), Box<dyn std::error::Error>>(())
-//! ```
+#![cfg_attr(
+    feature = "sync",
+    doc = r##"
+```rust,no_run
+// Read events from `events_in.hepmc2` and write them to `events_out.hepmc2`
+use hepmc2::{Reader, Writer};
+
+use std::io::BufReader;
+use std::fs::File;
+
+let input = BufReader::new(File::open("events_in.hepmc2")?);
+let in_events = Reader::from(input);
+
+let output = File::create("events_out.hepmc2")?;
+let mut writer = Writer::try_from(output)?;
+
+for event in in_events {
+   let event = event?;
+   println!("Current cross section: {}",  event.xs);
+   writer.write(&event)?
+}
+writer.finish()?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```"##
+)]
+#![cfg_attr(
+    feature = "tokio",
+    doc = r##"
+```rust,no_run
+# async fn try_main() -> Result<(), Box<dyn std::error::Error>> {
+// Read events from `events_in.hepmc2` and write them to `events_out.hepmc2`
+use hepmc2::{Reader, Writer};
+
+use tokio::io::BufReader;
+use tokio::fs::File;
+
+let input = BufReader::new(File::open("events_in.hepmc2").await?);
+let mut in_events = Reader::from(input);
+
+let output = File::create("events_out.hepmc2").await?;
+let mut writer = Writer::try_from(output).await?;
+
+while let Some(event) = in_events.next().await {
+   let event = event?;
+   println!("Current cross section: {}",  event.xs);
+   writer.write(&event).await?
+}
+writer.finish().await?;
+# Ok(())
+# }
+# tokio_test::block_on(async {try_main().await.unwrap()})
+```"##
+)]
+
 pub mod event;
 pub mod reader;
 pub mod writer;

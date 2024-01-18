@@ -36,7 +36,8 @@ tokio = ["hepmc2-macros/tokio", "dep:tokio"]
 criterion = "0.5.1"
 rand = "0.8.4"
 rand_xoshiro = "0.6.0"
-tokio = { version = "1.35.1", features = ["rt", "macros"] }
+tokio = { version = "1.35.1", features = ["rt", "macros", "fs"] }
+tokio-test = "0.4.3"
 
 [[bench]]
 name = "benchmark"
