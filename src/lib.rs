@@ -11,7 +11,6 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Read events from `events_in.hepmc2` and write them to `events_out.hepmc2`
 //! use hepmc2::{Reader, Writer};
 //!
@@ -30,8 +29,7 @@
 //!    writer.write(&event)?
 //! }
 //! writer.finish()?;
-//! # Ok(())
-//! # }
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 pub mod event;
 pub mod reader;

@@ -38,15 +38,13 @@ impl<T: Write> Writer<T> {
     /// # Example
     ///
     /// ```rust
-    /// # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     /// use hepmc2::writer::Writer;
     ///
     /// let mut output = Vec::new();
     /// let mut writer = Writer::new(&mut output)?;
     /// // always call finish at the end
     /// writer.finish()?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn new(stream: T) -> Result<Self, io::Error> {
         Self::with_header(stream, DEFAULT_HEADER)
@@ -60,15 +58,13 @@ impl<T: Write> Writer<T> {
     /// # Example
     ///
     /// ```rust
-    /// # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     /// use hepmc2::writer::Writer;
     ///
     /// let mut output = Vec::new();
     /// let mut writer = Writer::with_header(output, "")?;
     /// // always call finish at the end
     /// writer.finish()?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn with_header<U: Display>(stream: T, header: U) -> Result<Self, io::Error> {
         let mut writer = Self {
@@ -86,15 +82,13 @@ impl<T: Write> Writer<T> {
     /// # Example
     ///
     /// ```rust
-    /// # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     /// use hepmc2::writer::Writer;
     ///
     /// let mut output = Vec::new();
     /// let mut writer = Writer::new(&mut output)?;
     /// // always call finish at the end
     /// writer.finish()?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn finish(mut self) -> Result<(), std::io::Error> {
         self.ref_finish()
@@ -105,7 +99,6 @@ impl<T: Write> Writer<T> {
     /// # Example
     ///
     /// ```rust
-    /// # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     /// use hepmc2::writer::Writer;
     /// use hepmc2::event::Event;
     ///
@@ -115,8 +108,7 @@ impl<T: Write> Writer<T> {
     /// writer.write(&event)?;
     /// // always call finish at the end
     /// writer.finish()?;
-    /// # Ok(())
-    /// # }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn write(&mut self, event: &Event) -> Result<(), io::Error> {
         self.write_event_line(event)?;
